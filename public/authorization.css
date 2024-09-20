@@ -1,0 +1,36 @@
+form{
+    margin-inline: auto;
+    margin-top: 3em;
+    width: fit-content;
+    padding: 1em;
+
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+    align-items: center;
+    gap:2em;
+}
+
+input{
+    display: flex;
+    height: 4em;
+    width: 20em;
+    font-size: 1.3em;
+    padding-inline: 1em;
+}
+
+
+button{
+    margin-left: auto;
+    font-size: 1.7em;
+    padding: 1em;
+    background-color: blue;
+    color: white;
+}
+
+a:hover{
+    cursor: pointer;
+}
+
+
