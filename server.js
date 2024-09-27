@@ -1,38 +1,11 @@
-var express = require('express');
-var path = require('path');
-var app = express();
-var mssql = require('mssql');
+const express = require('express');
+const path = require('path');
+const mssql = require('mssql');
+const adminApp = require('./admin'); // Nested admin application
+const userApp = require('./user'); // Nested user application
 
-var port = 8080;
-
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views')); 
-
-
-async function adminExists(login, password) {
-    const pool = await poolPromise; 
-    const request = pool.request();
-
-    let adminResult = await request
-        .input('login', mssql.VarChar, login)
-        .input('password', mssql.VarChar, password)
-        .query('SELECT COUNT(*) AS count FROM admins WHERE login = @login AND password = @password');
-
-    return adminResult.recordset[0].count > 0;
-}
-
-
-async function userExists(login, password) {
-    const pool = await poolPromise; 
-    const request = pool.request();
-
-    let userResult = await request
-        .input('login', mssql.VarChar, login)
-        .input('password', mssql.VarChar, password)
-        .query('SELECT COUNT(*) AS count FROM users WHERE login = @login AND password = @password');
-
-    return userResult.recordset[0].count > 0;
-}
+const app = express();
+const port = 8080;
 
 const config = {
     user: 'test',
@@ -46,15 +19,18 @@ const config = {
         idleTimeoutMillis: 30000
     },
     options: {
-        encrypt: true, 
-        trustServerCertificate: true 
+        encrypt: true,
+        trustServerCertificate: true
     }
 };
 
+// Middleware
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'Pages'));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.urlencoded({ extended: true })); 
+app.use(express.urlencoded({ extended: true }));
 
-
+// Connect to MSSQL
 const poolPromise = new mssql.ConnectionPool(config)
     .connect()
     .then(pool => {
@@ -65,96 +41,17 @@ const poolPromise = new mssql.ConnectionPool(config)
         console.error('Database connection failed:', err);
         process.exit(1);
     });
-    app.get('/', async (req, res) => {
-        try {
-            res.sendFile(path.join(__dirname, 'Pages', 'mainPage.html'));
-        } catch (err) {
-            console.error('Error sending file', err);
-            res.status(500).send('Error retrieving page');
-        }
-    });
 
-    app.get('/authorization.html', async (req, res) => {
-        try {
-            res.sendFile(path.join(__dirname, 'Pages', 'authorization.html'));
-        } catch (err) {
-            console.error('Error sending file', err);
-            res.status(500).send('Error retrieving page');
-        }
-    });
+// Main route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'Pages', 'mainPage.html'));
+});
 
-    app.post('/authorization.html', async (req, res) => {
-        try {
-            const login = req.body.login;
-            const password = req.body.password;
-    
-            const adminExistsBool = await adminExists(login, password);
-            const userExistsBool = await userExists(login, password);
-    
-            const pool = await poolPromise; 
-            const request = pool.request();
-    
-            if (adminExistsBool) {
-                const adminResult = await request.query('SELECT login FROM Admins');
-                const userResult = await request.query('SELECT login FROM Users');
-    
-                res.render('adminTable', {
-                    admins: adminResult.recordset,
-                    users: userResult.recordset
-                });
-            } else if (userExistsBool) {
-                res.render('done', { login: login });
-            } else {
-                res.send('Invalid login or password');
-            }
-    
-        } catch (err) {
-            console.error('Error during login:', err);
-            res.status(500).send('Error during login');
-        }
-    });
-    
+// Use nested applications
+app.use('/admin', adminApp(poolPromise));
+app.use('/user', userApp(poolPromise));
 
-    app.get('/registration.html', async (req, res) => {
-        try {
-            res.sendFile(path.join(__dirname, 'Pages', 'registration.html'));
-        } catch (err) {
-            console.error('Error sending file', err);
-            res.status(500).send('Error retrieving page');
-        }
-    });
-
-    app.post('/registration.html',async(req,res) =>{
-        try {
-            const login = req.body.login;
-            const password = req.body.password;
-            const name = req.body.name;
-    
-            const pool = await poolPromise; 
-            const request = pool.request();
-
-            const adminExistsBool = await adminExists(login, password);
-            const userExistsBool = await userExists(login, password);
-    
-            if (adminExistsBool || userExistsBool) {
-                res.render('registration',{login:login})
-            }
-            else{
-                let regResult = await request
-                .input('login', mssql.VarChar, login)
-                .input('password', mssql.VarChar, password)
-                .input('name',mssql.VarChar,name)
-                .query("INSERT INTO Users (name, login, password) VALUES (@name , @login, @password)");
-                res.render('regComplete',{name:name})
-            }
-        } catch (err) {
-            console.error('Error during login:', err);
-            res.status(500).send('Error during login');
-        }
-    })
-    
-    
-
-    app.listen(port, () => {
-        console.log('App listening on port ' + port);
-    });
+// Start the server
+app.listen(port, () => {
+    console.log('App listening on port ' + port);
+});
